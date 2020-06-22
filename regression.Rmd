@@ -1,0 +1,133 @@
+---
+title: "Regression"
+author: "Sahana Rayan"
+date: "June 22, 2020"
+output: html_document
+---
+
+#Loading the dataset
+```{r message = FALSE, error=FALSE, warning=FALSE}
+library(tidyverse)
+tennis_data <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/regression_projects/tennis_2013_2017_GS.csv")
+```
+
+#Cleaning the dataset
+When looking at the composition of certain variables, lack of variation was identified.
+```{r}
+table("Retirement Binary Variable" = tennis_data$Retirement)
+table("Winning player's sets won" = tennis_data$w_setswon)
+```
+ 
+Some variables were also redundant that required to be removed
+
+```{r}
+table("Slam" = tennis_data$slam,
+      "Tournament" = tennis_data$tournament)
+```
+
+
+This information helped in creating this cleaned dataframe
+```{r}
+tennis_data_cleaned <- tennis_data %>% 
+  select(-c("w_n_netpt_w", "w_n_netpt", "slam", "player1", "player2", "a1", "a2", "X1", "match_id.y")) %>% 
+  rename(Net_points = l_n_netpt,
+         Net_points_won = l_n_netpt_w) %>% 
+  mutate(w_bp_success = w_n_bp_w/w_n_bp,
+         l_bp_success = l_n_bp_w/l_n_bp,
+         w_sv_success = w_n_sv_w/w_n_sv,
+         l_sv_success = l_n_sv_w/l_n_sv,
+         upset_bool = ifelse(winner_rank >loser_rank, TRUE, FALSE)) %>% 
+  filter(Retirement == FALSE) %>% 
+  filter(w_setswon %in% c(2,3))
+```
+
+The __select__ line removed all the redundant variables. The __rename__ function was used to rename certain variables to fit the context of the dataframe. The __mutate__ function was used to add some variables that we though couldbe worth looking at for EDA. These variables are serve success, break point success and a boolean variable that determines whether that particular match was an upset match. The __filter__ was used to filter out data that lacked variation.
+
+
+#EDA for continuous variables
+The correlation matrix was used to look at the linear relationships between certain continuous variables that we were interested in
+
+```{r}
+library(ggcorrplot)
+tennis_model_data <- tennis_data_cleaned %>%
+  dplyr::select(w_n_winners, 
+                w_bp_success,
+                w_sv_success,
+                w_pointswon,
+                w_n_ue,
+                l_n_ue,
+                w_n_sv_w)
+tennis_cor_matrix <- cor(tennis_model_data)
+ggcorrplot(tennis_cor_matrix)
+
+
+round_cor_matrix <- 
+  round(cor(tennis_model_data), 2)
+ggcorrplot(round_cor_matrix, 
+           hc.order = TRUE,
+           type = "lower",
+           lab = TRUE)
+
+```
+
+The losing player's number of unforced errors, winning player's number of winners, winning player's number of serve wins, and winning player's number of unforced errors had a strong correlation with winning player's total points won
+
+*w_pointswon* appeared to be an interesting variable and so the distrubution of this variable looked like this
+```{r}
+tennis_data_cleaned %>% 
+  ggplot() +
+  geom_histogram(aes(x = w_pointswon)) +
+  xlab("Winning player's points won") +
+  theme_bw()
+```
+
+
+The distribution appears to have some outliers and once these outliers are removed, the distribution looks like this:
+```{r}
+tennis_data_cleaned %>% 
+  filter((w_pointswon > 50) & (w_pointswon < 200)) %>%
+  ggplot() +
+  geom_histogram(aes(x = w_pointswon)) +
+  xlab("Winning player's points won") +
+  theme_bw()
+tennis_data_linear <- tennis_data_cleaned %>% 
+  filter((w_pointswon > 50) & (w_pointswon < 200))
+```
+
+
+
+The scatterplots for the aforementioned variables against *w_pointswon* were plotted
+```{r message = FALSE}
+library(GGally)
+ggpairs(tennis_data_linear,
+        columns =
+          c("w_pointswon", "w_n_ue", "l_n_ue", "w_n_winners", "w_n_sv_w"),
+        mapping = aes(alpha = 0.2)) +
+  theme_bw()
+
+```
+
+```{r messsage = FALSE}
+stat.lab <- c("Losing player's number of unforced errors", "Winning player's number of serve wins", 
+              "Winning player's number of unforced errors", "Winning player's number of winners")
+names(stat.lab) <- c("l_n_ue", "w_n_sv_w", "w_n_ue", "w_n_winners")
+tennis_data_cleaned %>% 
+  pivot_longer(c("w_n_ue", "w_n_winners", "l_n_ue", "w_n_sv_w"),
+               names_to = "Stat", 
+               values_to = "Values") %>% 
+  ggplot(aes(x = Values, y = w_pointswon)) +
+  geom_point(alpha = .2) +
+  facet_wrap(~Stat, scales = "free_x", labeller = labeller(Stat = stat.lab)) +
+  geom_smooth(method = "lm") +
+  ylab("Winning player's total points won") +
+  theme_bw() +
+  labs(
+    title = "Different variables vs Winning player's points won scatterplot"
+  )
+```
+
+
+
+#EDA for Discrete Variables
+
+_round_, _tour_, _Tournament_, _Year_, *w_setswon*, are a couple of categorical variables that could potentially affect *w_pointswon*
