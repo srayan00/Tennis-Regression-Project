@@ -119,7 +119,7 @@ tennis_data_linear%>%
   )
 ```
 
-___Note: the winning player's games won will be made into a bar chart because of its discrete nature__
+__Note: the winning player's games won will be made into a bar chart because of its discrete nature__
 
 These promising scatter plots led us to select *w_pointswon* as a response variable.
 
