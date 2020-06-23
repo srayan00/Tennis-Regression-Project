@@ -12,13 +12,13 @@ tennis_data <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/regre
 ```
 
 #Cleaning the dataset
-When looking at the composition of certain variables, lack of variation was identified.
+When looking at the composition of certain variables, lack of variation in these variables was identified.
 ```{r}
 table("Retirement Binary Variable" = tennis_data$Retirement)
 table("Winning player's sets won" = tennis_data$w_setswon)
 ```
  
-Some variables were also redundant that required to be removed
+Some variables were also redundant, as shown below, that required to be removed
 
 ```{r}
 table("Slam" = tennis_data$slam,
@@ -50,16 +50,16 @@ The correlation matrix was used to look at the linear relationships between cert
 ```{r}
 library(ggcorrplot)
 tennis_model_data <- tennis_data_cleaned %>%
-  dplyr::select(w_n_winners, 
-                w_bp_success,
-                w_sv_success,
-                w_pointswon,
-                w_n_ue,
-                l_n_ue,
-                w_n_sv_w)
+  dplyr::select(w_n_winners, #winning player's number of winners
+                w_bp_success,#Winning player's breakpoint success
+                w_sv_success,#Winning player's serve success
+                w_pointswon, #Winning player's points won
+                w_n_ue,      #Winning player's number of unforced errors
+                l_n_ue,      #Losing player's number of unforced errors
+                w_n_sv_w,    #Winning player's number of serve wins
+                w_gameswon)  #Winning player's number of games won
 tennis_cor_matrix <- cor(tennis_model_data)
 ggcorrplot(tennis_cor_matrix)
-
 
 round_cor_matrix <- 
   round(cor(tennis_model_data), 2)
@@ -70,9 +70,9 @@ ggcorrplot(round_cor_matrix,
 
 ```
 
-The losing player's number of unforced errors, winning player's number of winners, winning player's number of serve wins, and winning player's number of unforced errors had a strong correlation with winning player's total points won
+The losing player's number of unforced errors, winning player's number of winners, winning player's games won, winning player's number of serve wins, andwinning player's number of unforced errors had a strong correlation with winning player's total points won
 
-*w_pointswon* appeared to be an interesting variable and so the distrubution of this variable looked like this
+*w_pointswon* appeared to be an interesting variable and a potential response variable for the linear regression model and so the distrubution of this variable looked like this
 ```{r}
 tennis_data_cleaned %>% 
   ggplot() +
@@ -94,25 +94,18 @@ tennis_data_linear <- tennis_data_cleaned %>%
   filter((w_pointswon > 50) & (w_pointswon < 200))
 ```
 
-
+The **tennis_data_linear** is a dataframe containing data with the outliers in the *w_pointswon* distribution removed. This dataframe will be used in the rest of the project. 
 
 The scatterplots for the aforementioned variables against *w_pointswon* were plotted
-```{r message = FALSE}
-library(GGally)
-ggpairs(tennis_data_linear,
-        columns =
-          c("w_pointswon", "w_n_ue", "l_n_ue", "w_n_winners", "w_n_sv_w"),
-        mapping = aes(alpha = 0.2)) +
-  theme_bw()
 
-```
 
 ```{r messsage = FALSE}
 stat.lab <- c("Losing player's number of unforced errors", "Winning player's number of serve wins", 
-              "Winning player's number of unforced errors", "Winning player's number of winners")
-names(stat.lab) <- c("l_n_ue", "w_n_sv_w", "w_n_ue", "w_n_winners")
-tennis_data_cleaned %>% 
-  pivot_longer(c("w_n_ue", "w_n_winners", "l_n_ue", "w_n_sv_w"),
+              "Winning player's number of unforced errors", "Winning player's number of winners",
+              "Winning player's games won")
+names(stat.lab) <- c("l_n_ue", "w_n_sv_w", "w_n_ue", "w_n_winners", "w_gameswon")
+tennis_data_linear%>% 
+  pivot_longer(c("w_n_ue", "w_n_winners", "l_n_ue", "w_n_sv_w", "w_gameswon"),
                names_to = "Stat", 
                values_to = "Values") %>% 
   ggplot(aes(x = Values, y = w_pointswon)) +
@@ -126,8 +119,99 @@ tennis_data_cleaned %>%
   )
 ```
 
+These promising scatter plots led us to select *w_pointswon* as a response variable.
+
+
+But, in order to look at linear relationships among explanatory variables, pairs plots were used. This is important in detecting any redundancies within the model as in an ideal situation, all explanatory variables are independent of one and other.
+
+```{r message = FALSE}
+library(GGally)
+ggpairs(tennis_data_linear,
+        columns =
+          c("w_n_ue", "l_n_ue", "w_n_winners", "w_n_sv_w", "w_gameswon"),
+        mapping = aes(alpha = 0.2)) +
+  theme_bw()
+
+```
+
+#Hierarchial Clustering of variables
+
+Hierarchial Clustering of variables is also a great way to group variables that are similar or variables that shows dependencies on each other. Other continuous variables (variables in the correlation matrix) were also included in this clustering model.
+
+```{r}
+tennis_ex_vars <- dplyr::select(tennis_model_data, -w_pointswon)
+exp_cor_matrix <- cor(tennis_ex_vars)
+cor_dist_matrix <- 1 - abs(exp_cor_matrix)
+cor_dist_matrix <- as.dist(cor_dist_matrix)
+
+library(ggdendro)
+tennis_exp_hc <- hclust(cor_dist_matrix,
+                     "complete")
+ggdendrogram(tennis_exp_hc,
+             rotate = TRUE,
+             size = 2)
+             
+#library(dendextend)
+#cor_dist_matrix %>%
+  #hclust() %>%
+  #as.dendrogram() %>%
+  #set("branches_k_col", 
+     # k = 2) %>% 
+  #set("labels_cex", .9) %>%
+  #ggplot(horiz = TRUE)
+
+```
+
+Both the dendrogram and the pairs plot indicate that *w_n_sv_w*,  *w_n_winners*, and *w_gameswon* have a high correlation with each other and when they are included in the linear regression model, these variables might create some redundancy.
 
 
 #EDA for Discrete Variables
 
 _round_, _tour_, _Tournament_, _Year_, *w_setswon*, are a couple of categorical variables that could potentially affect *w_pointswon*
+
+Box plots along with violin plots were useful in determining this relationship
+```{r}
+tennis_data_linear %>% 
+  ggplot(aes(x = as.factor(w_setswon), y = w_pointswon)) +
+  geom_violin() +
+  geom_boxplot(width = .2) + 
+  xlab("Winning player's number of sets won") +
+  ylab("Winning player's Total points won") +
+  labs(title = "Violin and Box plots for sets won and points won") +
+  theme_bw()
+```
+
+
+As expected, there seems to be a relationship between total points won and number of sets won.
+
+```{r}
+tennis_data_linear %>%
+  ggplot(aes(x = Tour, y = w_pointswon)) +
+  geom_violin() +
+  geom_boxplot(width = .2) + 
+  xlab("Tour") +
+  ylab("Winning player's Total points won") +
+  labs(title = "Violin and Box plots for Women's/Men's league and points won") +
+  scale_x_discrete(label = c("Association for Tennis Players (Men's)", "Womens Tennis Association")) +
+  theme_bw()
+```
+
+There is distinct difference in distribution of *w_pointswon* in the Men's and Women's league of tennis.
+
+These clear differences cannot be observed with _tournament_, _round_, and _Year_ as shown below with _tournament_ variable
+
+```{r}
+tennis_data_linear %>%
+  ggplot(aes(x = tournament, y = w_pointswon)) +
+  geom_violin() +
+  geom_boxplot(width = .2) + 
+  xlab("Tournament") +
+  ylab("Winning player's Total points won") +
+  labs(title = "Violin and Box plots for different tournaments and points won") +
+  theme_bw()
+```
+
+#Linear Modeling
+
+Explanatory Variables of interest include *w_n_winners*, *w_n_ue*, *Tour*, *w_setswon*, *l_n_ue*, *w_gameswon*
+Response Variiable in question is *w_pointswon*
