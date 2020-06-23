@@ -70,7 +70,7 @@ ggcorrplot(round_cor_matrix,
 
 ```
 
-The losing player's number of unforced errors, winning player's number of winners, winning player's games won, winning player's number of serve wins, andwinning player's number of unforced errors had a strong correlation with winning player's total points won
+The losing player's number of unforced errors, winning player's number of winners, winning player's games won, winning player's number of serve wins, and winning player's number of unforced errors had a strong correlation with winning player's total points won
 
 *w_pointswon* appeared to be an interesting variable and a potential response variable for the linear regression model and so the distrubution of this variable looked like this
 ```{r}
@@ -118,6 +118,8 @@ tennis_data_linear%>%
     title = "Different variables vs Winning player's points won scatterplot"
   )
 ```
+
+___Note: the winning player's games won will be made into a bar chart because of its discrete nature__
 
 These promising scatter plots led us to select *w_pointswon* as a response variable.
 
@@ -215,3 +217,43 @@ tennis_data_linear %>%
 
 Explanatory Variables of interest include *w_n_winners*, *w_n_ue*, *Tour*, *w_setswon*, *l_n_ue*, *w_gameswon*
 Response Variiable in question is *w_pointswon*
+
+```{r}
+tennis_data_cleaned < 
+init_w_pointswon <- lm(w_pointswon ~ w_n_winners + w_n_ue + Tour + as.factor(w_setswon) + l_n_ue + w_gameswon, tennis_data_linear)
+summary(init_w_pointswon)
+library(ggfortify)
+autoplot(init_w_pointswon, 
+         which = 1:6,
+         alpha = .2,
+         ncols = 3) +
+  theme_bw()
+```
+
+__Note:The analysis of these plots will be done soon__
+
+The data was split into train and test.
+```{r}
+#Train-Test split
+set.seed(4345)
+n_players <- nrow(tennis_data_linear)
+train_i <- sample(n_players, n_players * 0.7, replace = FALSE)
+test_i <- (1:n_players)[-train_i]
+tennis_train <- tennis_data_linear[train_i,]
+tennis_test <- tennis_data_linear[test_i,]
+```
+
+Two models (one with *w_setswons* and one without) were trained and tested
+```{r}
+candidate_model_2 <- lm(w_pointswon ~ w_n_winners + w_n_ue  + l_n_ue + w_gameswon + Tour, tennis_train)
+model_2_preds <- predict(candidate_model_2, newdata = tennis_test)
+model_2_mse <- mean((model_2_preds - tennis_test$w_pointswon)^2)
+model_2_mse
+
+candidate_model_3 <- lm(w_pointswon ~ w_n_winners + w_n_ue  + l_n_ue + w_gameswon + as.factor(w_setswon)+ Tour, tennis_train)
+model_3_preds <- predict(candidate_model_3, newdata = tennis_test)
+model_3_mse <- mean((model_3_preds - tennis_test$w_pointswon)^2)
+model_3_mse
+```
+
+__Note: K-fold cross validation is yet to be performed on these models and more linear modelling will be done soon.__
