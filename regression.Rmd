@@ -117,6 +117,12 @@ tennis_data_linear%>%
   labs(
     title = "Different variables vs Winning player's points won scatterplot"
   )
+
+tennis_data_linear %>% 
+  group_by(w_gameswon) %>% 
+  summarise(mean_pointswon = mean(w_pointswon)) %>% 
+  ggplot() +
+  geom_col(aes(x = w_gameswon, y = mean_pointswon),  stat = "identity")
 ```
 
 __Note: the winning player's games won will be made into a bar chart because of its discrete nature__
@@ -246,14 +252,31 @@ tennis_test <- tennis_data_linear[test_i,]
 Two models (one with *w_setswons* and one without) were trained and tested
 ```{r}
 candidate_model_2 <- lm(w_pointswon ~ w_n_winners + w_n_ue  + l_n_ue + w_gameswon + Tour, tennis_train)
+summary(candidate_model_2)
 model_2_preds <- predict(candidate_model_2, newdata = tennis_test)
 model_2_mse <- mean((model_2_preds - tennis_test$w_pointswon)^2)
 model_2_mse
 
-candidate_model_3 <- lm(w_pointswon ~ w_n_winners + w_n_ue  + l_n_ue + w_gameswon + as.factor(w_setswon)+ Tour, tennis_train)
+candidate_model_3<- lm(w_pointswon ~ w_n_winners + w_n_ue  + l_n_ue + w_gameswon + tournament + Tour, tennis_train)
+summary(candidate_model_3)
 model_3_preds <- predict(candidate_model_3, newdata = tennis_test)
 model_3_mse <- mean((model_3_preds - tennis_test$w_pointswon)^2)
 model_3_mse
 ```
 
 __Note: K-fold cross validation is yet to be performed on these models and more linear modelling will be done soon.__
+
+```{r}
+all_model <- lm(w_pointswon ~ w_n_winners + Tour + tournament + w_n_ue + l_n_ue + w_gameswon,
+                data = tennis_data_linear)
+ggcoef(all_model, 
+       exclude_intercept = TRUE,
+       vline = TRUE,
+       vline_color = "red") + 
+  theme_bw()
+np_tournament_model <- lm(w_pointswon ~ w_n_winners + Tour + w_n_ue + l_n_ue + w_gameswon,
+                          data = tennis_data_linear)
+interaction_model <- lm(w_pointswon ~ w_n_winners + Tour*tournament + w_n_ue + l_n_ue + w_gameswon,
+                        data = tennis_data_linear)
+
+```
