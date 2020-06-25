@@ -155,5 +155,5 @@ ggcorrplot(round_cor_matrix,
            type = "lower",
            lab = TRUE)
 
-table("tour" = tennis_data$Tour,
-      "sets won" = as.factor(tennis_data$w_setswon))
+table("tour" = tennis_data_linear$Tour,
+      "sets won" = as.factor(tennis_data_linear$w_setswon))

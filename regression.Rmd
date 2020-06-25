@@ -221,62 +221,96 @@ tennis_data_linear %>%
 
 #Linear Modeling
 
-Explanatory Variables of interest include *w_n_winners*, *w_n_ue*, *Tour*, *w_setswon*, *l_n_ue*, *w_gameswon*
+Explanatory Variables of interest include *w_n_winners*, *w_n_ue*, *Tour*, *l_n_ue*, *w_gameswon*
 Response Variiable in question is *w_pointswon*
 
+*w_setswon* was removed because it didn't give much variation from *Tour*.
 ```{r}
-tennis_data_cleaned < 
-init_w_pointswon <- lm(w_pointswon ~ w_n_winners + w_n_ue + Tour + as.factor(w_setswon) + l_n_ue + w_gameswon, tennis_data_linear)
-summary(init_w_pointswon)
-library(ggfortify)
-autoplot(init_w_pointswon, 
-         which = 1:6,
-         alpha = .2,
-         ncols = 3) +
-  theme_bw()
+table("tour" = tennis_data_linear$Tour,
+      "sets won" = as.factor(tennis_data_linear$w_setswon))
 ```
 
-__Note:The analysis of these plots will be done soon__
+Three different models have been created. One model is with *tournament* and one model is without *tournament* along with a model having an interaction between *tournament* and *Tour*. A null model was also used as a comparison point in this analysis. K fold cross validation was performed and the root mean squared errors were plotted. 
 
-The data was split into train and test.
+The function for k-fold cross validation was created
 ```{r}
-#Train-Test split
-set.seed(4345)
-n_players <- nrow(tennis_data_linear)
-train_i <- sample(n_players, n_players * 0.7, replace = FALSE)
-test_i <- (1:n_players)[-train_i]
-tennis_train <- tennis_data_linear[train_i,]
-tennis_test <- tennis_data_linear[test_i,]
+set.seed(2020)
+tennis_data_linear <- tennis_data_linear %>%
+  mutate(test_fold = sample(rep(1:5, length.out = n())))
+get_cv_preds <- function(model_formula, data = tennis_data_linear) {
+  # generate holdout predictions for every row based season
+  map_dfr(unique(data$test_fold), 
+          function(holdout) {
+            # Separate test and training data:
+            test_data <- data %>%
+              filter(test_fold == holdout)
+            train_data <- data %>%
+              filter(test_fold != holdout)
+            # Train model:
+            reg_model <- lm(as.formula(model_formula), data = train_data)
+            # Return tibble of holdout results:
+            tibble(test_preds = predict(reg_model, newdata = test_data),
+                   test_actual = test_data$w_pointswon,
+                   test_fold = holdout) 
+          })
+}
 ```
 
-Two models (one with *w_setswons* and one without) were trained and tested
-```{r}
-candidate_model_2 <- lm(w_pointswon ~ w_n_winners + w_n_ue  + l_n_ue + w_gameswon + Tour, tennis_train)
-summary(candidate_model_2)
-model_2_preds <- predict(candidate_model_2, newdata = tennis_test)
-model_2_mse <- mean((model_2_preds - tennis_test$w_pointswon)^2)
-model_2_mse
+The models were trained using K fold validation and these are the MSEs for the three models
 
-candidate_model_3<- lm(w_pointswon ~ w_n_winners + w_n_ue  + l_n_ue + w_gameswon + tournament + Tour, tennis_train)
-summary(candidate_model_3)
-model_3_preds <- predict(candidate_model_3, newdata = tennis_test)
-model_3_mse <- mean((model_3_preds - tennis_test$w_pointswon)^2)
-model_3_mse
+```{r}
+all_cv_preds <- get_cv_preds("w_pointswon ~ w_n_winners + Tour + tournament + w_n_ue + l_n_ue + w_gameswon")
+no_tournament_cv_preds <- get_cv_preds("w_pointswon ~ w_n_winners + Tour + w_n_ue + l_n_ue + w_gameswon")
+interaction_cv_preds <- get_cv_preds("w_pointswon ~ w_n_winners + Tour*tournament + w_n_ue + l_n_ue + w_gameswon")
+null_cv_preds <- get_cv_preds("w_pointswon ~ 1")
+
+
+bind_rows(mutate(all_cv_preds, type = "All"),
+          mutate(no_tournament_cv_preds, type = "Excludes Tournament"),
+          mutate(interaction_cv_preds, type = "Interaction between Tour & Tournament"),
+          mutate(null_cv_preds, type = "Null Model")) %>%
+  group_by(type) %>%
+  summarize(rmse = sqrt(mean((test_actual - test_preds)^2))) %>%
+  mutate(type = fct_reorder(type, rmse)) %>%
+  ggplot(aes(x = type, y = rmse)) +
+  geom_point() + coord_flip() + theme_bw() + xlab("Model Type") + ylab("Root Mean Squared Error")
 ```
 
-__Note: K-fold cross validation is yet to be performed on these models and more linear modelling will be done soon.__
+All the three models have a better prediction accuracy than the null model. The next plot is a similar plot to this but without the null model in order to better compare these models
 
 ```{r}
-all_model <- lm(w_pointswon ~ w_n_winners + Tour + tournament + w_n_ue + l_n_ue + w_gameswon,
-                data = tennis_data_linear)
+bind_rows(mutate(all_cv_preds, type = "All"),
+          mutate(no_tournament_cv_preds, type = "Excludes Tournament"),
+          mutate(interaction_cv_preds, type = "Interaction between Tour & Tournament")) %>%
+  group_by(type) %>%
+  summarize(rmse = sqrt(mean((test_actual - test_preds)^2))) %>%
+  mutate(type = fct_reorder(type, rmse)) %>%
+  ggplot(aes(x = type, y = rmse)) +
+  geom_point() + coord_flip() + theme_bw() + xlab("Model Type") + ylab("Root Mean Squared Error")
+```
+
+The model with all selected variables and no interactions had the lowest rmse. 
+
+#Interpretation of this model
+The model's summary is displayed below along with its coeffecient plot.
+```{r}
+summary(all_model)
 ggcoef(all_model, 
        exclude_intercept = TRUE,
        vline = TRUE,
        vline_color = "red") + 
-  theme_bw()
-np_tournament_model <- lm(w_pointswon ~ w_n_winners + Tour + w_n_ue + l_n_ue + w_gameswon,
-                          data = tennis_data_linear)
-interaction_model <- lm(w_pointswon ~ w_n_winners + Tour*tournament + w_n_ue + l_n_ue + w_gameswon,
-                        data = tennis_data_linear)
+  theme_bw() +
+  labs(title = "All Variables model") +
+  xlab("Coeffecients") +
+  ylab("Variables")
+```
 
+These are the Diagnostic plots for this model. 
+```{r}
+library(ggfortify)
+autoplot(all_model, 
+         which = 1:6,
+         alpha = .2,
+         ncols = 3) +
+  theme_bw()
 ```
