@@ -66,7 +66,12 @@ round_cor_matrix <-
 ggcorrplot(round_cor_matrix, 
            hc.order = TRUE,
            type = "lower",
-           lab = TRUE)
+           lab = TRUE,
+           colors = c("#0072B2", "white", "#D55E00")) +
+  labs(
+    title = "Correlation Plot with variables of interest"
+  ) +
+  scale_color_continuous()
 
 ```
 
@@ -89,6 +94,9 @@ tennis_data_cleaned %>%
   ggplot() +
   geom_histogram(aes(x = w_pointswon)) +
   xlab("Winning player's points won") +
+  labs(
+    title = "Histogram of Winning player's total points won"
+  ) +
   theme_bw()
 tennis_data_linear <- tennis_data_cleaned %>% 
   filter((w_pointswon > 50) & (w_pointswon < 200))
@@ -100,8 +108,8 @@ The scatterplots for the aforementioned variables against *w_pointswon* were plo
 
 
 ```{r messsage = FALSE}
-stat.lab <- c("Losing player's number of unforced errors", "Winning player's number of serve wins", 
-              "Winning player's number of unforced errors", "Winning player's number of winners",
+stat.lab <- c("Losing player's no. of unforced errors", "Winning player's no. of serve wins", 
+              "Winning player's no. of unforced errors", "Winning player's no. of winners",
               "Winning player's games won")
 names(stat.lab) <- c("l_n_ue", "w_n_sv_w", "w_n_ue", "w_n_winners", "w_gameswon")
 tennis_data_linear%>% 
@@ -111,7 +119,7 @@ tennis_data_linear%>%
   ggplot(aes(x = Values, y = w_pointswon)) +
   geom_point(alpha = .2) +
   facet_wrap(~Stat, scales = "free_x", labeller = labeller(Stat = stat.lab)) +
-  geom_smooth(method = "lm") +
+  geom_smooth(method = "lm", color = "#0072B2") +
   ylab("Winning player's total points won") +
   theme_bw() +
   labs(
@@ -181,8 +189,8 @@ Box plots along with violin plots were useful in determining this relationship
 ```{r}
 tennis_data_linear %>% 
   ggplot(aes(x = as.factor(w_setswon), y = w_pointswon)) +
-  geom_violin() +
-  geom_boxplot(width = .2) + 
+  geom_violin(color = "#0072B2", size = 1.3) +
+  geom_boxplot(width = .2, color = "#D55E00", size = .7) + 
   xlab("Winning player's number of sets won") +
   ylab("Winning player's Total points won") +
   labs(title = "Violin and Box plots for sets won and points won") +
@@ -195,12 +203,13 @@ As expected, there seems to be a relationship between total points won and numbe
 ```{r}
 tennis_data_linear %>%
   ggplot(aes(x = Tour, y = w_pointswon)) +
-  geom_violin() +
-  geom_boxplot(width = .2) + 
+  geom_violin(color = "#0072B2", size = 1.3) +
+  geom_boxplot(width = .2, color = "#D55E00", size = .7) + 
   xlab("Tour") +
   ylab("Winning player's Total points won") +
   labs(title = "Violin and Box plots for Women's/Men's league and points won") +
-  scale_x_discrete(label = c("Association for Tennis Players (Men's)", "Womens Tennis Association")) +
+  scale_x_discrete(limits = c("wta", "atp"), 
+                   label = c("Womens Tennis Association", "Association for Tennis Players (Men's)")) +
   theme_bw()
 ```
 
@@ -211,14 +220,40 @@ These clear differences cannot be observed with _tournament_, _round_, and _Year
 ```{r}
 tennis_data_linear %>%
   ggplot(aes(x = tournament, y = w_pointswon)) +
-  geom_violin() +
-  geom_boxplot(width = .2) + 
+  geom_violin(color = "#0072B2", size = 1.3) +
+  geom_boxplot(width = .2, color = "#D55E00", size = .7) + 
   xlab("Tournament") +
   ylab("Winning player's Total points won") +
   labs(title = "Violin and Box plots for different tournaments and points won") +
   theme_bw()
 ```
 
+
+#Elastic Net Regularization
+
+In order to confirm the results of the variable selection done through EDA, Elastic Net regularization is performed. 
+
+First, the optimal alpha or the alpha value that gives the least cv error is found. Models with alpha values between 0 and 1 with increments of 0.1 are trained
+
+```{r}
+tennis_data_linear <- tennis_data_linear %>% na.omit()
+model_x <- model.matrix(w_pointswon ~ ., tennis_data_linear)[, -c(1, 2)]
+model_y <- tennis_data_linear$w_pointswon
+set.seed(2020)
+fold_id <- sample(rep(1:10, length.out = nrow(model_x)))
+alphalist <- seq(0,1,by=0.1)
+elasticnet <- lapply(alphalist, function(a){
+  cv.glmnet(model_x, model_y, alpha=a, foldid = fold_id)
+})
+```
+
+The minimum cv errors are printed for each of the 11 models and the model with the least cv error and the coeffecients of this linear model was printed. This is done to check if the variables that the model keeps corresponds to the variables selected through EDA
+
+```{r}
+elastic <- elasticnet[[5]]
+plot(elastic)
+coef(elastic)
+```
 #Linear Modeling
 
 Explanatory Variables of interest include *w_n_winners*, *w_n_ue*, *Tour*, *l_n_ue*, *w_gameswon*
@@ -276,20 +311,7 @@ bind_rows(mutate(all_cv_preds, type = "All"),
   geom_point() + coord_flip() + theme_bw() + xlab("Model Type") + ylab("Root Mean Squared Error")
 ```
 
-All the three models have a better prediction accuracy than the null model. The next plot is a similar plot to this but without the null model in order to better compare these models
-
-```{r}
-bind_rows(mutate(all_cv_preds, type = "All"),
-          mutate(no_tournament_cv_preds, type = "Excludes Tournament"),
-          mutate(interaction_cv_preds, type = "Interaction between Tour & Tournament")) %>%
-  group_by(type) %>%
-  summarize(rmse = sqrt(mean((test_actual - test_preds)^2))) %>%
-  mutate(type = fct_reorder(type, rmse)) %>%
-  ggplot(aes(x = type, y = rmse)) +
-  geom_point() + coord_flip() + theme_bw() + xlab("Model Type") + ylab("Root Mean Squared Error")
-```
-
-The model with all selected variables and no interactions had the lowest rmse. 
+All the three models have a better prediction accuracy than the null model. The model with all selected variables and no interactions had the lowest RMSE. 
 
 #Interpretation of this model
 The model's summary is displayed below along with its coeffecient plot.
@@ -309,8 +331,19 @@ These are the Diagnostic plots for this model.
 ```{r}
 library(ggfortify)
 autoplot(all_model, 
-         which = 1:6,
+         which = c(1, 2),
          alpha = .2,
-         ncols = 3) +
+         ncols = 2) +
+  theme_bw()
+
+autoplot(all_model, 
+         which = c(3, 4),
+         alpha = .2,
+         ncols = 2) +
+  theme_bw()
+autoplot(all_model, 
+         which = c(5, 6),
+         alpha = .2,
+         ncols = 2) +
   theme_bw()
 ```
