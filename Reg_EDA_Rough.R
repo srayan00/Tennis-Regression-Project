@@ -40,10 +40,27 @@ tennis_data_cleaned %>%
 
 #looking for continuous variables with a normal distribution
 tennis_data_cleaned %>% 
-  #filter((w_pointswon > 50) & (w_pointswon < 200)) %>% 
-  mutate( w_pointsgames = w_pointswon/ w_gameswon) %>% 
-  ggplot() +
-  geom_histogram(aes(x = w_pointsgames)) +
+  filter((w_pointswon > 50) & (w_pointswon < 200)) %>%
+  ggplot(aes(x = w_pointswon)) +
+  geom_histogram(aes(y = ..density..), fill = "#0072B2", alpha = 0.2, color = "black") +
+  geom_density(color = "#D55E00", size = 1) +
+  xlab("Winning player's points won") +
+  ylab("Density") +
+  labs(
+    title = "Histogram of Winning player's total points won"
+  ) +
+  theme_bw()
+tennis_data_linear <- tennis_data_cleaned %>% 
+  filter((w_pointswon > 50) & (w_pointswon < 200))
+
+tennis_data_linear %>% 
+  ggplot(aes(x = "", y = w_pointswon)) +
+  geom_boxplot() +
+  theme_bw()
+tennis_data_linear %>% 
+  ggplot(aes(sample = w_pointswon)) +
+  geom_qq(color = "#0072B2", alpha = .2) +
+  geom_qq_line(color = "#D55E00" ) +
   theme_bw()
 
 #EDA

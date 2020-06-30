@@ -134,6 +134,20 @@ autoplot(all_model,
          ncols = 2) +
   theme_bw()
 
+#Coeffecient plot with scaled variables
+coef_analysis_model <- lm(scale(w_pointswon) ~ scale(w_n_winners) + Tour + tournament + 
+                            scale(w_n_ue) + scale(l_n_ue) + scale(w_gameswon),
+                          data = tennis_data_linear)
+
+ggcoef(coef_analysis_model, 
+       exclude_intercept = TRUE,
+       vline = TRUE,
+       vline_color = "red") + 
+  theme_bw() +
+  labs(title = "Scaled Variables model") +
+  xlab("Coefficients") +
+  ylab("Variables")
+
 #Trying elastic net regression
 tennis_data_linear <- tennis_data_linear %>% na.omit()
 model_x <- model.matrix(w_pointswon ~ ., tennis_data_linear)[, -c(1, 2)]
@@ -146,7 +160,6 @@ cv_ridge <- cv.glmnet(model_x, model_y, foldid = fold_id, alpha = 0)
 cv_lasso <- cv.glmnet(model_x, model_y, foldid = fold_id, alpha = 1)
 which.min(c(min(cv_en_25$cvm), min(cv_en_50$cvm), min(cv_ridge$cvm), min(cv_lasso$cvm)))
 coef(cv_en_50)
-
 
 #A more effecient way of finding optimal alpha
 alphalist <- seq(0,1,by=0.1)

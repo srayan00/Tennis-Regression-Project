@@ -91,15 +91,18 @@ The distribution appears to have some outliers and once these outliers are remov
 ```{r}
 tennis_data_cleaned %>% 
   filter((w_pointswon > 50) & (w_pointswon < 200)) %>%
-  ggplot() +
-  geom_histogram(aes(x = w_pointswon)) +
+  ggplot(aes(x = w_pointswon)) +
+  geom_histogram(aes(y = ..density..), fill = "#0072B2", color = "black") +
+  geom_density(color = "#D55E00", size = 1.5) +
   xlab("Winning player's points won") +
+  ylab("Density") +
   labs(
-    title = "Histogram of Winning player's total points won"
+    title = "Histogram of the density of Winning player's total points won"
   ) +
   theme_bw()
 tennis_data_linear <- tennis_data_cleaned %>% 
   filter((w_pointswon > 50) & (w_pointswon < 200))
+
 ```
 
 The **tennis_data_linear** is a dataframe containing data with the outliers in the *w_pointswon* distribution removed. This dataframe will be used in the rest of the project. 
@@ -165,7 +168,10 @@ tennis_exp_hc <- hclust(cor_dist_matrix,
                      "complete")
 ggdendrogram(tennis_exp_hc,
              rotate = TRUE,
-             size = 2)
+             size = 2) +
+  labs(
+    title = "Dendrogram for selected variables"
+  )
              
 #library(dendextend)
 #cor_dist_matrix %>%
@@ -236,6 +242,7 @@ In order to confirm the results of the variable selection done through EDA, Elas
 First, the optimal alpha or the alpha value that gives the least cv error is found. Models with alpha values between 0 and 1 with increments of 0.1 are trained
 
 ```{r}
+library(glmnet)
 tennis_data_linear <- tennis_data_linear %>% na.omit()
 model_x <- model.matrix(w_pointswon ~ ., tennis_data_linear)[, -c(1, 2)]
 model_y <- tennis_data_linear$w_pointswon
@@ -251,8 +258,8 @@ The minimum cv errors are printed for each of the 11 models and the model with t
 
 ```{r}
 elastic <- elasticnet[[5]]
-plot(elastic)
-coef(elastic)
+#coef(elastic)
+elastic$lambda.min
 ```
 #Linear Modeling
 
@@ -308,7 +315,7 @@ bind_rows(mutate(all_cv_preds, type = "All"),
   summarize(rmse = sqrt(mean((test_actual - test_preds)^2))) %>%
   mutate(type = fct_reorder(type, rmse)) %>%
   ggplot(aes(x = type, y = rmse)) +
-  geom_point() + coord_flip() + theme_bw() + xlab("Model Type") + ylab("Root Mean Squared Error")
+  geom_point(color = "#D55E00") + coord_flip() + theme_bw() + xlab("Model Type") + ylab("Root Mean Squared Error")
 ```
 
 All the three models have a better prediction accuracy than the null model. The model with all selected variables and no interactions had the lowest RMSE. 
@@ -316,6 +323,9 @@ All the three models have a better prediction accuracy than the null model. The 
 #Interpretation of this model
 The model's summary is displayed below along with its coeffecient plot.
 ```{r}
+library(GGally)
+all_model <- lm(w_pointswon ~ w_n_winners + Tour + tournament + w_n_ue + l_n_ue + w_gameswon,
+                data = tennis_data_linear)
 summary(all_model)
 ggcoef(all_model, 
        exclude_intercept = TRUE,
@@ -323,10 +333,27 @@ ggcoef(all_model,
        vline_color = "red") + 
   theme_bw() +
   labs(title = "All Variables model") +
-  xlab("Coeffecients") +
+  xlab("Coefficients") +
   ylab("Variables")
 ```
 
+
+Coeffecient analysis can be done better if all variables in the model are scaled.
+
+```{r}
+coef_analysis_model <- lm(scale(w_pointswon) ~ scale(w_n_winners) + Tour + tournament + 
+                            scale(w_n_ue) + scale(l_n_ue) + scale(w_gameswon),
+                          data = tennis_data_linear)
+
+ggcoef(coef_analysis_model, 
+       exclude_intercept = TRUE,
+       vline = TRUE,
+       vline_color = "red") + 
+  theme_bw() +
+  labs(title = "Scaled Variables model") +
+  xlab("Coefficients") +
+  ylab("Variables")
+```
 These are the Diagnostic plots for this model. 
 ```{r}
 library(ggfortify)
